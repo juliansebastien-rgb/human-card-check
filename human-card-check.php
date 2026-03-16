@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
- * Version: 0.3.1
+ * Version: 0.3.2
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.3.1';
+    private const VERSION = '0.3.2';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -29,6 +29,8 @@ final class Human_Card_Check {
     private const LANGUAGE_OPTION = 'human_card_check_language';
     private const PRO_TOKEN_OPTION = 'human_card_check_pro_token';
     private const PRO_STATUS_OPTION = 'human_card_check_pro_status';
+    private const PRO_PAYMENT_LINK_OPTION = 'human_card_check_pro_payment_link';
+    private const DEFAULT_PRO_PAYMENT_LINK = 'https://buy.stripe.com/cNidR29Lz7OV8cN2Hj8k800';
 
     /** @var array<string,array<int,string>> */
     private array $card_labels = [
@@ -80,6 +82,7 @@ final class Human_Card_Check {
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_menu', [$this, 'register_settings_page']);
+        add_filter('plugin_action_links_' . plugin_basename(__FILE__), [$this, 'plugin_action_links']);
 
         add_shortcode('human_card_check_demo', [$this, 'render_demo_shortcode']);
         add_shortcode('caj_human_check_demo', [$this, 'render_demo_shortcode']);
@@ -133,6 +136,16 @@ final class Human_Card_Check {
                 'default' => '',
             ]
         );
+
+        register_setting(
+            'human_card_check_settings',
+            self::PRO_PAYMENT_LINK_OPTION,
+            [
+                'type' => 'string',
+                'sanitize_callback' => 'esc_url_raw',
+                'default' => self::DEFAULT_PRO_PAYMENT_LINK,
+            ]
+        );
     }
 
     public function register_settings_page(): void {
@@ -178,6 +191,7 @@ final class Human_Card_Check {
         $current = $this->get_language_setting();
         $pro_token = $this->get_pro_token();
         $pro_status = $this->get_pro_status();
+        $payment_link = $this->get_pro_payment_link();
         ?>
         <div class="wrap">
             <h1>Human Card Check</h1>
@@ -197,6 +211,22 @@ final class Human_Card_Check {
                                 <option value="es" <?php selected($current, 'es'); ?>>Espanol</option>
                             </select>
                             <p class="description">Choose the language used for the card challenge on the front end.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="human_card_check_pro_payment_link">Pro payment link</label>
+                        </th>
+                        <td>
+                            <input
+                                type="url"
+                                id="human_card_check_pro_payment_link"
+                                name="<?php echo esc_attr(self::PRO_PAYMENT_LINK_OPTION); ?>"
+                                value="<?php echo esc_attr($payment_link); ?>"
+                                class="regular-text"
+                                placeholder="https://buy.stripe.com/..."
+                            />
+                            <p class="description">Paste your Stripe Payment Link here. It will be shown in the plugin list and in this settings page.</p>
                         </td>
                     </tr>
                     <tr>
@@ -229,8 +259,29 @@ final class Human_Card_Check {
             <h2>Free vs Pro</h2>
             <p><strong>Free:</strong> card challenge, language setting, native WordPress registration, Ultimate Member integration.</p>
             <p><strong>Pro:</strong> trust score, email/domain analysis, risk logs, configurable thresholds and automatic decisions.</p>
+            <?php if ($payment_link !== '') : ?>
+                <p><a class="button button-primary" href="<?php echo esc_url($payment_link); ?>" target="_blank" rel="noopener noreferrer">Buy Human Card Check Pro</a></p>
+            <?php endif; ?>
         </div>
         <?php
+    }
+
+    /**
+     * @param array<int,string> $links
+     * @return array<int,string>
+     */
+    public function plugin_action_links(array $links): array {
+        $settings_url = admin_url('options-general.php?page=human-card-check');
+        $actions = [
+            '<a href="' . esc_url($settings_url) . '">Settings</a>',
+        ];
+
+        $payment_link = $this->get_pro_payment_link();
+        if ($payment_link !== '' && !$this->is_pro_active()) {
+            $actions[] = '<a href="' . esc_url($payment_link) . '" target="_blank" rel="noopener noreferrer"><strong>Upgrade to Pro</strong></a>';
+        }
+
+        return array_merge($actions, $links);
     }
 
     public function render_demo_shortcode(): string {
@@ -787,6 +838,12 @@ final class Human_Card_Check {
     private function get_pro_token(): string {
         $value = get_option(self::PRO_TOKEN_OPTION, '');
         return is_string($value) ? $value : '';
+    }
+
+    private function get_pro_payment_link(): string {
+        $value = get_option(self::PRO_PAYMENT_LINK_OPTION, self::DEFAULT_PRO_PAYMENT_LINK);
+        $value = is_string($value) ? trim($value) : '';
+        return $value !== '' ? $value : self::DEFAULT_PRO_PAYMENT_LINK;
     }
 
     /**
