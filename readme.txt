@@ -3,7 +3,7 @@ Contributors: mapage
 Tags: captcha, anti-spam, anti-bot, registration, ultimate-member
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -55,7 +55,7 @@ Only for plugin update checks while the plugin is installed from GitHub. The ver
 
 = Which forms are supported? =
 
-Version 0.3.0 supports the native WordPress registration form and includes an Ultimate Member registration integration.
+Version 0.3.1 supports the native WordPress registration form and includes an Ultimate Member registration integration.
 
 = Can I choose the challenge language? =
 
@@ -71,6 +71,10 @@ The Pro addon is intended for advanced trust scoring, email/domain analysis, ris
 No. This plugin focuses on a human verification challenge for registration flows.
 
 == Changelog ==
+
+= 0.3.1 =
+* Added a decision filter so Human Card Check Pro can block or review registrations.
+* Kept the free/pro token architecture introduced in 0.3.0.
 
 = 0.3.0 =
 * Added the free/pro architecture base.

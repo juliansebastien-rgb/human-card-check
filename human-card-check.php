@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
- * Version: 0.3.0
+ * Version: 0.3.1
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.3.0';
+    private const VERSION = '0.3.1';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -270,13 +270,17 @@ final class Human_Card_Check {
         if (!$result['valid']) {
             $errors->add('human_card_check', $result['message']);
         } else {
-            $this->run_pro_registration_analysis(
+            $decision = $this->run_pro_registration_analysis(
                 [
                     'context' => 'wp-register',
                     'user_login' => $sanitized_user_login,
                     'user_email' => $user_email,
                 ]
             );
+
+            if (!$decision['allow']) {
+                $errors->add('human_card_check_pro', $decision['message']);
+            }
         }
 
         return $errors;
@@ -298,13 +302,17 @@ final class Human_Card_Check {
         } else {
             $email = isset($_POST['user_email']) ? sanitize_email(wp_unslash($_POST['user_email'])) : '';
             $username = isset($_POST['user_login']) ? sanitize_user(wp_unslash($_POST['user_login'])) : '';
-            $this->run_pro_registration_analysis(
+            $decision = $this->run_pro_registration_analysis(
                 [
                     'context' => 'um-register',
                     'user_login' => $username,
                     'user_email' => $email,
                 ]
             );
+
+            if (!$decision['allow']) {
+                UM()->form()->add_error('human_card_check_pro', $decision['message']);
+            }
         }
     }
 
@@ -704,7 +712,7 @@ final class Human_Card_Check {
                 $name = isset($asset['name']) ? (string) $asset['name'] : '';
                 $download = isset($asset['browser_download_url']) ? (string) $asset['browser_download_url'] : '';
 
-                if ($name !== '' && str_ends_with($name, '.zip') && $download !== '') {
+                if ($name !== '' && substr($name, -4) === '.zip' && $download !== '') {
                     $package = $download;
                     break;
                 }
@@ -801,10 +809,15 @@ final class Human_Card_Check {
 
     /**
      * @param array<string,string> $context
+     * @return array{allow:bool,message:string,action:string}
      */
-    private function run_pro_registration_analysis(array $context): void {
+    private function run_pro_registration_analysis(array $context): array {
         if (!$this->is_pro_active()) {
-            return;
+            return [
+                'allow' => true,
+                'message' => '',
+                'action' => 'allow',
+            ];
         }
 
         $payload = [
@@ -830,6 +843,30 @@ final class Human_Card_Check {
          * extra verification or moderation.
          */
         do_action('human_card_check_pro_analyze_registration', $payload);
+
+        $decision = apply_filters(
+            'human_card_check_pro_registration_decision',
+            [
+                'allow' => true,
+                'message' => '',
+                'action' => 'allow',
+            ],
+            $payload
+        );
+
+        if (!is_array($decision)) {
+            return [
+                'allow' => true,
+                'message' => '',
+                'action' => 'allow',
+            ];
+        }
+
+        return [
+            'allow' => !empty($decision['allow']),
+            'message' => isset($decision['message']) ? (string) $decision['message'] : '',
+            'action' => isset($decision['action']) ? (string) $decision['action'] : 'allow',
+        ];
     }
 
     private function get_card_display_label(int $card_id): string {
