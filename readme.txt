@@ -1,14 +1,14 @@
 === Human Card Check ===
 Contributors: mapage
-Tags: captcha, anti-spam, anti-bot, registration, ultimate-member
+Tags: captcha, anti-spam, anti-bot, registration, ultimate-member, woocommerce, comments, login
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 0.3.1
+Stable tag: 0.3.4
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Human-friendly card challenge for WordPress registration forms and Ultimate Member.
+Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
 
 == Description ==
 
@@ -30,6 +30,10 @@ Features:
 * No external captcha provider
 * No third-party challenge provider
 * Works with native WordPress registration
+* Supports WooCommerce registration
+* Supports WordPress comments
+* Supports WordPress login
+* Supports WordPress lost password
 * Includes an Ultimate Member registration integration
 * Rotating questions and shuffled answers
 * Admin setting to choose French, English, Italian or Spanish
@@ -40,7 +44,7 @@ Features:
 
 1. Upload the plugin files to the `/wp-content/plugins/human-card-check` directory, or install the plugin through the WordPress plugins screen.
 2. Activate the plugin through the `Plugins` screen in WordPress.
-3. Test it on the native WordPress registration form or your Ultimate Member registration form.
+3. Test it on your native WordPress registration, WooCommerce registration, comments, login, lost password or Ultimate Member forms.
 4. Optional: create a test page with the shortcode `[human_card_check_demo]`.
 
 == Frequently Asked Questions ==
@@ -55,7 +59,7 @@ Only for plugin update checks while the plugin is installed from GitHub. The ver
 
 = Which forms are supported? =
 
-Version 0.3.1 supports the native WordPress registration form and includes an Ultimate Member registration integration.
+Version 0.3.4 supports native WordPress registration, WooCommerce registration, WordPress comments, WordPress login, WordPress lost password and Ultimate Member registration.
 
 = Can I choose the challenge language? =
 
@@ -71,6 +75,12 @@ The Pro addon is intended for advanced trust scoring, email/domain analysis, ris
 No. This plugin focuses on a human verification challenge for registration flows.
 
 == Changelog ==
+
+= 0.3.4 =
+* Added WooCommerce registration support.
+* Added WordPress comments support.
+* Added WordPress login support.
+* Added WordPress lost password support.
 
 = 0.3.1 =
 * Added a decision filter so Human Card Check Pro can block or review registrations.

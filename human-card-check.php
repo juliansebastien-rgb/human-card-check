@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
- * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
- * Version: 0.3.3
+ * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
+ * Version: 0.3.4
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.3.3';
+    private const VERSION = '0.3.4';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -89,9 +89,18 @@ final class Human_Card_Check {
 
         add_action('register_form', [$this, 'render_wp_registration_challenge']);
         add_filter('registration_errors', [$this, 'validate_wp_registration'], 20, 3);
+        add_action('woocommerce_register_form', [$this, 'render_woo_registration_challenge']);
+        add_filter('woocommerce_registration_errors', [$this, 'validate_woo_registration'], 20, 3);
 
         add_action('um_after_register_fields', [$this, 'render_um_registration_challenge']);
         add_action('um_submit_form_errors_hook_registration', [$this, 'validate_um_registration'], 20);
+        add_action('comment_form_after_fields', [$this, 'render_comment_challenge']);
+        add_action('comment_form_logged_in_after', [$this, 'render_comment_challenge']);
+        add_filter('preprocess_comment', [$this, 'validate_comment_submission'], 20);
+        add_action('login_form', [$this, 'render_login_challenge']);
+        add_filter('authenticate', [$this, 'validate_wp_login'], 25, 3);
+        add_action('lostpassword_form', [$this, 'render_lostpassword_challenge']);
+        add_action('lostpassword_post', [$this, 'validate_lostpassword_request'], 20, 2);
 
         add_filter('pre_set_site_transient_update_plugins', [$this, 'inject_github_update']);
         add_filter('plugins_api', [$this, 'filter_plugin_information'], 20, 3);
@@ -258,7 +267,7 @@ final class Human_Card_Check {
             </form>
             <hr />
             <h2>Free vs Pro</h2>
-            <p><strong>Free:</strong> card challenge, language setting, native WordPress registration, Ultimate Member integration.</p>
+            <p><strong>Free:</strong> card challenge, language setting, native WordPress registration, WooCommerce registration, comments, login, lost password and Ultimate Member integration.</p>
             <p><strong>Pro:</strong> trust score, email/domain analysis, risk logs, configurable thresholds and automatic decisions.</p>
             <?php if ($payment_link !== '') : ?>
                 <p><a class="button button-primary" href="<?php echo esc_url($payment_link); ?>" target="_blank" rel="noopener noreferrer">Buy Human Card Check Pro</a></p>
@@ -365,6 +374,150 @@ final class Human_Card_Check {
             if (!$decision['allow']) {
                 UM()->form()->add_error('human_card_check_pro', $decision['message']);
             }
+        }
+    }
+
+    public function render_woo_registration_challenge(): void {
+        $this->render_challenge_markup('woo-register');
+    }
+
+    public function validate_woo_registration(WP_Error $errors, string $username = '', string $email = ''): WP_Error {
+        $result = $this->validate_request_payload();
+
+        if (!$result['valid']) {
+            $errors->add('human_card_check', $result['message']);
+        } else {
+            $decision = $this->run_pro_registration_analysis(
+                [
+                    'context' => 'woo-register',
+                    'user_login' => $username,
+                    'user_email' => $email,
+                ]
+            );
+
+            if (!$decision['allow']) {
+                $errors->add('human_card_check_pro', $decision['message']);
+            }
+        }
+
+        return $errors;
+    }
+
+    public function render_comment_challenge(): void {
+        if (is_admin()) {
+            return;
+        }
+
+        $this->render_challenge_markup('comment');
+    }
+
+    /**
+     * @param array<string,mixed> $commentdata
+     * @return array<string,mixed>
+     */
+    public function validate_comment_submission(array $commentdata): array {
+        if (is_admin() || wp_doing_ajax()) {
+            return $commentdata;
+        }
+
+        if (empty($commentdata['comment_post_ID']) || !empty($commentdata['comment_type'])) {
+            return $commentdata;
+        }
+
+        $result = $this->validate_request_payload();
+        if (!$result['valid']) {
+            wp_die(esc_html($result['message']), esc_html__('Comment blocked', 'human-card-check'), ['response' => 403]);
+        }
+
+        $decision = $this->run_pro_registration_analysis(
+            [
+                'context' => 'comment',
+                'user_login' => !empty($commentdata['comment_author']) ? (string) $commentdata['comment_author'] : '',
+                'user_email' => !empty($commentdata['comment_author_email']) ? (string) $commentdata['comment_author_email'] : '',
+            ]
+        );
+
+        if (!$decision['allow']) {
+            wp_die(esc_html($decision['message']), esc_html__('Comment blocked', 'human-card-check'), ['response' => 403]);
+        }
+
+        return $commentdata;
+    }
+
+    public function render_login_challenge(): void {
+        if (!$this->is_wp_login_action('login')) {
+            return;
+        }
+
+        $this->render_challenge_markup('login');
+    }
+
+    public function validate_wp_login($user, string $username, string $password) {
+        if (!$this->is_wp_login_action('login') || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+            return $user;
+        }
+
+        if ($user instanceof WP_Error && $user->has_errors()) {
+            return $user;
+        }
+
+        $result = $this->validate_request_payload();
+        if (!$result['valid']) {
+            return new WP_Error('human_card_check', $result['message']);
+        }
+
+        $decision = $this->run_pro_registration_analysis(
+            [
+                'context' => 'login',
+                'user_login' => $username,
+                'user_email' => '',
+            ]
+        );
+
+        if (!$decision['allow']) {
+            return new WP_Error('human_card_check_pro', $decision['message']);
+        }
+
+        return $user;
+    }
+
+    public function render_lostpassword_challenge(): void {
+        $this->render_challenge_markup('lostpassword');
+    }
+
+    public function validate_lostpassword_request(WP_Error $errors, $user_data): void {
+        $result = $this->validate_request_payload();
+
+        if (!$result['valid']) {
+            $errors->add('human_card_check', $result['message']);
+            return;
+        }
+
+        $user_login = '';
+        $user_email = '';
+
+        if ($user_data instanceof WP_User) {
+            $user_login = $user_data->user_login;
+            $user_email = $user_data->user_email;
+        } elseif (is_string($user_data)) {
+            $submitted = trim($user_data);
+            if (is_email($submitted)) {
+                $user_email = $submitted;
+            } else {
+                $user_login = $submitted;
+            }
+        }
+
+        $decision = $this->run_pro_registration_analysis(
+            [
+                'context' => 'lostpassword',
+                'user_login' => $user_login,
+                'user_email' => $user_email,
+            ]
+        );
+
+        if (!$decision['allow']) {
+            $errors->add('human_card_check_pro', $decision['message']);
         }
     }
 
@@ -680,8 +833,8 @@ final class Human_Card_Check {
             'last_updated' => $release['published_at'],
             'download_link' => $release['package'],
             'sections' => [
-                'description' => 'Human-friendly card challenge for WordPress registration forms and Ultimate Member.',
-                'installation' => 'Upload the plugin, activate it, then test it on your registration forms. You can also use the [human_card_check_demo] shortcode on a test page. The challenge language can be changed in Settings > Human Card Check.',
+                'description' => 'Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.',
+                'installation' => 'Upload the plugin, activate it, then test it on your registration, WooCommerce, comments, login, lost password or Ultimate Member forms. You can also use the [human_card_check_demo] shortcode on a test page. The challenge language can be changed in Settings > Human Card Check.',
                 'changelog' => sprintf("= %s =\n* GitHub release package.\n", $release['version']),
             ],
             'banners' => [],
@@ -863,6 +1016,11 @@ final class Human_Card_Check {
     private function is_pro_active(): bool {
         $status = $this->get_pro_status();
         return $status['active'];
+    }
+
+    private function is_wp_login_action(string $expected_action): bool {
+        $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : 'login';
+        return $action === $expected_action;
     }
 
     /**
