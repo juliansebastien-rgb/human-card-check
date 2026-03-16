@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
- * Version: 0.2.2
+ * Version: 0.3.0
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.2.2';
+    private const VERSION = '0.3.0';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -27,6 +27,8 @@ final class Human_Card_Check {
     private const GITHUB_REPOSITORY_URL = 'https://github.com/juliansebastien-rgb/human-card-check';
     private const UPDATE_CACHE_TTL = HOUR_IN_SECONDS;
     private const LANGUAGE_OPTION = 'human_card_check_language';
+    private const PRO_TOKEN_OPTION = 'human_card_check_pro_token';
+    private const PRO_STATUS_OPTION = 'human_card_check_pro_status';
 
     /** @var array<string,array<int,string>> */
     private array $card_labels = [
@@ -121,6 +123,16 @@ final class Human_Card_Check {
                 'default' => 'auto',
             ]
         );
+
+        register_setting(
+            'human_card_check_settings',
+            self::PRO_TOKEN_OPTION,
+            [
+                'type' => 'string',
+                'sanitize_callback' => [$this, 'sanitize_pro_token_setting'],
+                'default' => '',
+            ]
+        );
     }
 
     public function register_settings_page(): void {
@@ -140,12 +152,32 @@ final class Human_Card_Check {
         return in_array($value, $allowed, true) ? $value : 'auto';
     }
 
+    public function sanitize_pro_token_setting($value): string {
+        $token = is_string($value) ? trim($value) : '';
+        $token = preg_replace('/[^A-Za-z0-9_\-]/', '', $token);
+        $is_active = $token !== '' && strlen($token) >= 16;
+
+        update_option(
+            self::PRO_STATUS_OPTION,
+            [
+                'active' => $is_active,
+                'checked_at' => gmdate('Y-m-d H:i:s'),
+                'source' => $is_active ? 'manual-token' : 'none',
+            ],
+            false
+        );
+
+        return is_string($token) ? $token : '';
+    }
+
     public function render_settings_page(): void {
         if (!current_user_can('manage_options')) {
             return;
         }
 
         $current = $this->get_language_setting();
+        $pro_token = $this->get_pro_token();
+        $pro_status = $this->get_pro_status();
         ?>
         <div class="wrap">
             <h1>Human Card Check</h1>
@@ -167,9 +199,36 @@ final class Human_Card_Check {
                             <p class="description">Choose the language used for the card challenge on the front end.</p>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="human_card_check_pro_token">Pro token</label>
+                        </th>
+                        <td>
+                            <input
+                                type="password"
+                                id="human_card_check_pro_token"
+                                name="<?php echo esc_attr(self::PRO_TOKEN_OPTION); ?>"
+                                value="<?php echo esc_attr($pro_token); ?>"
+                                class="regular-text"
+                                autocomplete="off"
+                            />
+                            <p class="description">Enter the token received after payment to unlock Human Card Check Pro features.</p>
+                            <p>
+                                <strong>Status:</strong>
+                                <?php echo $pro_status['active'] ? esc_html__('Pro active', 'human-card-check') : esc_html__('Free mode', 'human-card-check'); ?>
+                            </p>
+                            <?php if (!empty($pro_status['checked_at'])) : ?>
+                                <p class="description">Last token check: <?php echo esc_html($pro_status['checked_at']); ?></p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
                 </table>
                 <?php submit_button('Save changes'); ?>
             </form>
+            <hr />
+            <h2>Free vs Pro</h2>
+            <p><strong>Free:</strong> card challenge, language setting, native WordPress registration, Ultimate Member integration.</p>
+            <p><strong>Pro:</strong> trust score, email/domain analysis, risk logs, configurable thresholds and automatic decisions.</p>
         </div>
         <?php
     }
@@ -210,6 +269,14 @@ final class Human_Card_Check {
 
         if (!$result['valid']) {
             $errors->add('human_card_check', $result['message']);
+        } else {
+            $this->run_pro_registration_analysis(
+                [
+                    'context' => 'wp-register',
+                    'user_login' => $sanitized_user_login,
+                    'user_email' => $user_email,
+                ]
+            );
         }
 
         return $errors;
@@ -228,6 +295,16 @@ final class Human_Card_Check {
 
         if (!$result['valid']) {
             UM()->form()->add_error('human_card_check', $result['message']);
+        } else {
+            $email = isset($_POST['user_email']) ? sanitize_email(wp_unslash($_POST['user_email'])) : '';
+            $username = isset($_POST['user_login']) ? sanitize_user(wp_unslash($_POST['user_login'])) : '';
+            $this->run_pro_registration_analysis(
+                [
+                    'context' => 'um-register',
+                    'user_login' => $username,
+                    'user_email' => $email,
+                ]
+            );
         }
     }
 
@@ -697,6 +774,62 @@ final class Human_Card_Check {
         $prefix = strtolower(substr((string) $locale, 0, 2));
 
         return in_array($prefix, ['fr', 'en', 'it', 'es'], true) ? $prefix : 'en';
+    }
+
+    private function get_pro_token(): string {
+        $value = get_option(self::PRO_TOKEN_OPTION, '');
+        return is_string($value) ? $value : '';
+    }
+
+    /**
+     * @return array{active:bool,checked_at:string,source:string}
+     */
+    private function get_pro_status(): array {
+        $value = get_option(self::PRO_STATUS_OPTION, []);
+
+        return [
+            'active' => !empty($value['active']),
+            'checked_at' => isset($value['checked_at']) && is_string($value['checked_at']) ? $value['checked_at'] : '',
+            'source' => isset($value['source']) && is_string($value['source']) ? $value['source'] : 'none',
+        ];
+    }
+
+    private function is_pro_active(): bool {
+        $status = $this->get_pro_status();
+        return $status['active'];
+    }
+
+    /**
+     * @param array<string,string> $context
+     */
+    private function run_pro_registration_analysis(array $context): void {
+        if (!$this->is_pro_active()) {
+            return;
+        }
+
+        $payload = [
+            'user_email' => isset($context['user_email']) ? sanitize_email($context['user_email']) : '',
+            'user_login' => isset($context['user_login']) ? sanitize_user($context['user_login']) : '',
+            'context' => isset($context['context']) ? sanitize_text_field($context['context']) : '',
+            'ip' => isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '',
+            'user_agent' => isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : '',
+            'trust_score' => 0,
+            'flags' => [],
+        ];
+
+        if ($payload['user_email'] !== '' && str_contains($payload['user_email'], '@')) {
+            $domain = substr(strrchr($payload['user_email'], '@'), 1);
+            $payload['email_domain'] = strtolower((string) $domain);
+        }
+
+        /**
+         * Future Human Card Check Pro addon entry point.
+         *
+         * The free plugin passes sanitized registration context so a paid addon
+         * can calculate a trust score, persist logs and decide whether to apply
+         * extra verification or moderation.
+         */
+        do_action('human_card_check_pro_analyze_registration', $payload);
     }
 
     private function get_card_display_label(int $card_id): string {

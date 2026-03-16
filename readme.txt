@@ -3,7 +3,7 @@ Contributors: mapage
 Tags: captcha, anti-spam, anti-bot, registration, ultimate-member
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 0.2.2
+Stable tag: 0.3.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -34,6 +34,7 @@ Features:
 * Rotating questions and shuffled answers
 * Admin setting to choose French, English, Italian or Spanish
 * Optional GitHub-based update flow while the plugin is distributed outside WordPress.org
+* Free plugin foundation for a token-activated Pro addon
 
 == Installation ==
 
@@ -54,17 +55,27 @@ Only for plugin update checks while the plugin is installed from GitHub. The ver
 
 = Which forms are supported? =
 
-Version 0.2.2 supports the native WordPress registration form and includes an Ultimate Member registration integration.
+Version 0.3.0 supports the native WordPress registration form and includes an Ultimate Member registration integration.
 
 = Can I choose the challenge language? =
 
 Yes. You can force the challenge language in `Settings > Human Card Check`, or leave it on automatic mode.
+
+= Is there a Pro version? =
+
+Yes. The free plugin now includes a Pro token field in `Settings > Human Card Check`.
+The Pro addon is intended for advanced trust scoring, email/domain analysis, risk logs and configurable registration decisions.
 
 = Is this a full anti-spam suite? =
 
 No. This plugin focuses on a human verification challenge for registration flows.
 
 == Changelog ==
+
+= 0.3.0 =
+* Added the free/pro architecture base.
+* Added a Pro token field in the admin settings.
+* Added internal hooks for a future Trust Score addon.
 
 = 0.2.2 =
 * GitHub updater now prefers packaged release ZIP files.
