@@ -7,6 +7,7 @@ It currently supports:
 - native WordPress registration
 - Ultimate Member registration
 - a demo shortcode: `[human_card_check_demo]`
+- GitHub-based update checks for self-hosted distribution
 
 ## What it does
 
@@ -35,6 +36,8 @@ For WordPress.org distribution:
 1. keep `readme.txt` updated
 2. tag releases clearly
 3. deploy approved releases to the WordPress.org SVN repository
+
+See [WORDPRESS-ORG.md](WORDPRESS-ORG.md) for the short release checklist.
 
 ## License
 

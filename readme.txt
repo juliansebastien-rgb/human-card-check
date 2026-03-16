@@ -28,10 +28,11 @@ Features:
 
 * Human-friendly card challenge
 * No external captcha provider
-* No third-party API calls
+* No third-party challenge provider
 * Works with native WordPress registration
 * Includes an Ultimate Member registration integration
 * Rotating questions and shuffled answers
+* Optional GitHub-based update flow while the plugin is distributed outside WordPress.org
 
 == Installation ==
 
@@ -46,6 +47,10 @@ Features:
 
 No. The plugin does not use an external captcha provider.
 
+= Does it call GitHub? =
+
+Only for plugin update checks while the plugin is installed from GitHub. The verification challenge itself does not depend on any external service.
+
 = Which forms are supported? =
 
 Version 0.2.0 supports the native WordPress registration form and includes an Ultimate Member registration integration.
@@ -53,11 +58,6 @@ Version 0.2.0 supports the native WordPress registration form and includes an Ul
 = Is this a full anti-spam suite? =
 
 No. This plugin focuses on a human verification challenge for registration flows.
-
-== Screenshots ==
-
-1. Card challenge displayed on a registration form.
-2. Example question with shuffled answers.
 
 == Changelog ==
 

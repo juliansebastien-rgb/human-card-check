@@ -1,13 +1,16 @@
 <?php
 /**
  * Plugin Name: Human Card Check
- * Plugin URI: https://github.com/mapage-online/human-card-check
+ * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
  * Version: 0.2.0
  * Author: MaPage
+ * Requires at least: 6.0
+ * Requires PHP: 7.4
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: human-card-check
+ * Update URI: https://github.com/juliansebastien-rgb/human-card-check
  */
 
 if (!defined('ABSPATH')) {
@@ -16,9 +19,13 @@ if (!defined('ABSPATH')) {
 
 final class Human_Card_Check {
     private const VERSION = '0.2.0';
-    private const TRANSIENT_PREFIX = 'caj_hc_';
+    private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
+    private const GITHUB_REPOSITORY = 'juliansebastien-rgb/human-card-check';
+    private const GITHUB_API_BASE = 'https://api.github.com/repos/juliansebastien-rgb/human-card-check';
+    private const GITHUB_REPOSITORY_URL = 'https://github.com/juliansebastien-rgb/human-card-check';
+    private const UPDATE_CACHE_TTL = HOUR_IN_SECONDS;
 
     /** @var array<int,string> */
     private array $card_labels = [
@@ -51,6 +58,11 @@ final class Human_Card_Check {
 
         add_action('um_after_register_fields', [$this, 'render_um_registration_challenge']);
         add_action('um_submit_form_errors_hook_registration', [$this, 'validate_um_registration'], 20);
+
+        add_filter('pre_set_site_transient_update_plugins', [$this, 'inject_github_update']);
+        add_filter('plugins_api', [$this, 'filter_plugin_information'], 20, 3);
+        add_filter('upgrader_source_selection', [$this, 'normalize_github_update_source'], 10, 4);
+        add_action('upgrader_process_complete', [$this, 'clear_update_cache'], 10, 2);
     }
 
     public function register_assets(): void {
@@ -74,12 +86,12 @@ final class Human_Card_Check {
         $message = '';
 
         if (
-            isset($_POST['caj_demo_nonce']) &&
-            wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['caj_demo_nonce'])), 'caj_demo_submit')
+            isset($_POST['human_card_check_demo_nonce']) &&
+            wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['human_card_check_demo_nonce'])), 'human_card_check_demo_submit')
         ) {
             $result = $this->validate_request_payload();
             $message = sprintf(
-                '<div class="caj-human-check__demo-result %1$s">%2$s</div>',
+                '<div class="human-card-check__demo-result %1$s">%2$s</div>',
                 $result['valid'] ? 'is-valid' : 'is-invalid',
                 esc_html($result['message'])
             );
@@ -87,11 +99,11 @@ final class Human_Card_Check {
 
         ob_start();
         ?>
-        <form method="post" class="caj-human-check__demo-form">
+        <form method="post" class="human-card-check__demo-form">
             <?php echo $message; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
             <?php $this->render_challenge_markup('demo'); ?>
-            <?php wp_nonce_field('caj_demo_submit', 'caj_demo_nonce'); ?>
-            <p><button type="submit">Test the verification</button></p>
+            <?php wp_nonce_field('human_card_check_demo_submit', 'human_card_check_demo_nonce'); ?>
+            <p><button type="submit"><?php echo esc_html__('Test the verification', 'human-card-check'); ?></button></p>
         </form>
         <?php
         return (string) ob_get_clean();
@@ -105,7 +117,7 @@ final class Human_Card_Check {
         $result = $this->validate_request_payload();
 
         if (!$result['valid']) {
-            $errors->add('caj_human_check', $result['message']);
+            $errors->add('human_card_check', $result['message']);
         }
 
         return $errors;
@@ -123,7 +135,7 @@ final class Human_Card_Check {
         $result = $this->validate_request_payload();
 
         if (!$result['valid']) {
-            UM()->form()->add_error('caj_human_check', $result['message']);
+            UM()->form()->add_error('human_card_check', $result['message']);
         }
     }
 
@@ -133,13 +145,13 @@ final class Human_Card_Check {
 
         $challenge = $this->create_challenge($context);
         ?>
-        <div class="caj-human-check" data-context="<?php echo esc_attr($context); ?>">
-            <p class="caj-human-check__title">Vérifions que vous êtes bien un humain :-)</p>
-            <p class="caj-human-check__question"><?php echo esc_html($challenge['question']); ?></p>
+        <div class="human-card-check" data-context="<?php echo esc_attr($context); ?>">
+            <p class="human-card-check__title"><?php echo esc_html__('Verifions que vous etes bien un humain :-)', 'human-card-check'); ?></p>
+            <p class="human-card-check__question"><?php echo esc_html($challenge['question']); ?></p>
 
-            <div class="caj-human-check__cards" aria-hidden="true">
+            <div class="human-card-check__cards" aria-hidden="true">
                 <?php foreach ($challenge['cards'] as $index => $card_id) : ?>
-                    <figure class="caj-human-check__card">
+                    <figure class="human-card-check__card">
                         <img
                             src="<?php echo esc_url($this->get_card_url((int) $card_id)); ?>"
                             alt=""
@@ -150,16 +162,16 @@ final class Human_Card_Check {
                 <?php endforeach; ?>
             </div>
 
-            <div class="caj-human-check__answers" role="radiogroup" aria-label="<?php echo esc_attr($challenge['question']); ?>">
+            <div class="human-card-check__answers" role="radiogroup" aria-label="<?php echo esc_attr($challenge['question']); ?>">
                 <?php foreach ($challenge['choices'] as $choice_key => $choice_label) : ?>
-                    <label class="caj-human-check__answer">
-                        <input type="radio" name="caj_human_check_answer" value="<?php echo esc_attr($choice_key); ?>" required>
+                    <label class="human-card-check__answer">
+                        <input type="radio" name="human_card_check_answer" value="<?php echo esc_attr($choice_key); ?>" required>
                         <span><?php echo esc_html($choice_label); ?></span>
                     </label>
                 <?php endforeach; ?>
             </div>
 
-            <input type="hidden" name="caj_human_check_id" value="<?php echo esc_attr($challenge['id']); ?>">
+            <input type="hidden" name="human_card_check_id" value="<?php echo esc_attr($challenge['id']); ?>">
         </div>
         <?php
     }
@@ -203,11 +215,15 @@ final class Human_Card_Check {
         $target_card = $cards[$target_position];
 
         return [
-            'question' => sprintf('Où se trouve le %s de coeur ?', $this->card_labels[$target_card]),
+            'question' => sprintf(
+                /* translators: %s: card label */
+                __('Where is the %s of hearts?', 'human-card-check'),
+                $this->card_labels[$target_card]
+            ),
             'choices' => $this->shuffle_choices([
-                'left' => 'À gauche',
-                'center' => 'Au centre',
-                'right' => 'À droite',
+                'left' => __('Left', 'human-card-check'),
+                'center' => __('Center', 'human-card-check'),
+                'right' => __('Right', 'human-card-check'),
             ]),
             'answer' => ['left', 'center', 'right'][$target_position],
         ];
@@ -221,11 +237,15 @@ final class Human_Card_Check {
         $choices = [];
 
         foreach ($cards as $card_id) {
-            $choices['card_' . $card_id] = sprintf('%s de coeur', $this->card_labels[$card_id]);
+            $choices['card_' . $card_id] = sprintf(
+                /* translators: %s: card label */
+                __('%s of hearts', 'human-card-check'),
+                $this->card_labels[$card_id]
+            );
         }
 
         return [
-            'question' => 'Quelle carte est au centre ?',
+            'question' => __('Which card is in the center?', 'human-card-check'),
             'choices' => $this->shuffle_choices($choices),
             'answer' => 'card_' . $cards[1],
         ];
@@ -244,10 +264,14 @@ final class Human_Card_Check {
         $is_present = in_array($target_card, $cards, true);
 
         return [
-            'question' => sprintf('Voyez-vous le %s de coeur ?', $this->card_labels[$target_card]),
+            'question' => sprintf(
+                /* translators: %s: card label */
+                __('Do you see the %s of hearts?', 'human-card-check'),
+                $this->card_labels[$target_card]
+            ),
             'choices' => $this->shuffle_choices([
-                'yes' => 'Oui',
-                'no' => 'Non',
+                'yes' => __('Yes', 'human-card-check'),
+                'no' => __('No', 'human-card-check'),
             ]),
             'answer' => $is_present ? 'yes' : 'no',
         ];
@@ -268,7 +292,7 @@ final class Human_Card_Check {
         }
 
         return [
-            'question' => 'Combien de figures voyez-vous ?',
+            'question' => __('How many face cards do you see?', 'human-card-check'),
             'choices' => $this->shuffle_choices([
                 '0' => '0',
                 '1' => '1',
@@ -295,11 +319,15 @@ final class Human_Card_Check {
         $choices = [];
 
         foreach ($cards as $card_id) {
-            $choices['card_' . $card_id] = sprintf('%s de coeur', $this->card_labels[$card_id]);
+            $choices['card_' . $card_id] = sprintf(
+                /* translators: %s: card label */
+                __('%s of hearts', 'human-card-check'),
+                $this->card_labels[$card_id]
+            );
         }
 
         return [
-            'question' => 'Quelle est la carte la plus forte ?',
+            'question' => __('Which card is the highest?', 'human-card-check'),
             'choices' => $this->shuffle_choices($choices),
             'answer' => 'card_' . $highest_card,
         ];
@@ -309,13 +337,13 @@ final class Human_Card_Check {
      * @return array{valid:bool,message:string}
      */
     private function validate_request_payload(): array {
-        $challenge_id = isset($_POST['caj_human_check_id']) ? sanitize_text_field(wp_unslash($_POST['caj_human_check_id'])) : '';
-        $submitted_answer = isset($_POST['caj_human_check_answer']) ? sanitize_text_field(wp_unslash($_POST['caj_human_check_answer'])) : '';
+        $challenge_id = isset($_POST['human_card_check_id']) ? sanitize_text_field(wp_unslash($_POST['human_card_check_id'])) : '';
+        $submitted_answer = isset($_POST['human_card_check_answer']) ? sanitize_text_field(wp_unslash($_POST['human_card_check_answer'])) : '';
 
         if ($challenge_id === '' || $submitted_answer === '') {
             return [
                 'valid' => false,
-            'message' => 'Please answer the card verification challenge.',
+                'message' => __('Please answer the card verification challenge.', 'human-card-check'),
             ];
         }
 
@@ -324,7 +352,7 @@ final class Human_Card_Check {
         if (!is_array($challenge) || empty($challenge['answer']) || empty($challenge['created_at'])) {
             return [
                 'valid' => false,
-                'message' => 'The verification expired. Please try again.',
+                'message' => __('The verification expired. Please try again.', 'human-card-check'),
             ];
         }
 
@@ -336,20 +364,20 @@ final class Human_Card_Check {
         if ($age < self::MIN_SOLVE_SECONDS) {
             return [
                 'valid' => false,
-                'message' => 'The verification was solved too quickly. Please try again.',
+                'message' => __('The verification was solved too quickly. Please try again.', 'human-card-check'),
             ];
         }
 
         if (!$is_correct) {
             return [
                 'valid' => false,
-                'message' => 'The answer is not correct. Please try again.',
+                'message' => __('The answer is not correct. Please try again.', 'human-card-check'),
             ];
         }
 
         return [
             'valid' => true,
-            'message' => 'Verification successful.',
+            'message' => __('Verification successful.', 'human-card-check'),
         ];
     }
 
@@ -374,7 +402,182 @@ final class Human_Card_Check {
     }
 
     private function position_label(int $index): string {
-        return ['Gauche', 'Centre', 'Droite'][$index] ?? '';
+        return [
+            __('Left', 'human-card-check'),
+            __('Center', 'human-card-check'),
+            __('Right', 'human-card-check'),
+        ][$index] ?? '';
+    }
+
+    public function inject_github_update($transient) {
+        if (!is_object($transient) || empty($transient->checked)) {
+            return $transient;
+        }
+
+        $release = $this->get_github_release_data();
+        if (!$release || empty($release['version'])) {
+            return $transient;
+        }
+
+        if (version_compare(self::VERSION, $release['version'], '>=')) {
+            return $transient;
+        }
+
+        $plugin_file = plugin_basename(__FILE__);
+        $update = (object) [
+            'slug' => 'human-card-check',
+            'plugin' => $plugin_file,
+            'new_version' => $release['version'],
+            'url' => $release['url'],
+            'package' => $release['package'],
+            'icons' => [],
+            'banners' => [],
+            'banners_rtl' => [],
+            'tested' => '6.8',
+            'requires_php' => '7.4',
+            'compatibility' => new stdClass(),
+        ];
+
+        $transient->response[$plugin_file] = $update;
+
+        return $transient;
+    }
+
+    public function filter_plugin_information($result, string $action, $args) {
+        if ($action !== 'plugin_information' || !is_object($args) || empty($args->slug) || $args->slug !== 'human-card-check') {
+            return $result;
+        }
+
+        $release = $this->get_github_release_data();
+
+        if (!$release) {
+            return $result;
+        }
+
+        return (object) [
+            'name' => 'Human Card Check',
+            'slug' => 'human-card-check',
+            'version' => $release['version'],
+            'author' => '<a href="https://github.com/juliansebastien-rgb">MaPage</a>',
+            'author_profile' => 'https://github.com/juliansebastien-rgb',
+            'homepage' => self::GITHUB_REPOSITORY_URL,
+            'requires' => '6.0',
+            'requires_php' => '7.4',
+            'tested' => '6.8',
+            'last_updated' => $release['published_at'],
+            'download_link' => $release['package'],
+            'sections' => [
+                'description' => 'Human-friendly card challenge for WordPress registration forms and Ultimate Member.',
+                'installation' => 'Upload the plugin, activate it, then test it on your registration forms. You can also use the [human_card_check_demo] shortcode on a test page.',
+                'changelog' => sprintf("= %s =\n* GitHub release package.\n", $release['version']),
+            ],
+            'banners' => [],
+            'icons' => [],
+        ];
+    }
+
+    public function clear_update_cache($upgrader, array $hook_extra): void {
+        if (($hook_extra['type'] ?? '') !== 'plugin') {
+            return;
+        }
+
+        $plugins = $hook_extra['plugins'] ?? [];
+
+        if (in_array(plugin_basename(__FILE__), $plugins, true)) {
+            delete_transient(self::TRANSIENT_PREFIX . 'github_release');
+        }
+    }
+
+    public function normalize_github_update_source(string $source, string $remote_source, $upgrader, array $hook_extra): string {
+        if (($hook_extra['type'] ?? '') !== 'plugin') {
+            return $source;
+        }
+
+        $plugins = $hook_extra['plugins'] ?? [];
+        if (!in_array(plugin_basename(__FILE__), $plugins, true)) {
+            return $source;
+        }
+
+        $normalized = trailingslashit($remote_source) . 'human-card-check';
+
+        if ($source === $normalized || !is_dir($source)) {
+            return $source;
+        }
+
+        if (@rename($source, $normalized)) {
+            return $normalized;
+        }
+
+        return $source;
+    }
+
+    private function get_github_release_data(): ?array {
+        $cache_key = self::TRANSIENT_PREFIX . 'github_release';
+        $cached = get_transient($cache_key);
+
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        $release = $this->request_github_release('/releases/latest');
+
+        if (!$release) {
+            $tag = $this->request_github_release('/tags');
+            if (!$tag || empty($tag[0]['name'])) {
+                return null;
+            }
+
+            $first_tag = $tag[0];
+            $release = [
+                'tag_name' => $first_tag['name'],
+                'zipball_url' => self::GITHUB_API_BASE . '/zipball/' . rawurlencode($first_tag['name']),
+                'html_url' => self::GITHUB_REPOSITORY_URL . '/releases/tag/' . rawurlencode($first_tag['name']),
+                'published_at' => gmdate('Y-m-d H:i:s'),
+                'body' => '',
+            ];
+        }
+
+        if (empty($release['tag_name']) || empty($release['zipball_url'])) {
+            return null;
+        }
+
+        $data = [
+            'version' => ltrim((string) $release['tag_name'], 'v'),
+            'package' => (string) $release['zipball_url'],
+            'url' => !empty($release['html_url']) ? (string) $release['html_url'] : self::GITHUB_REPOSITORY_URL,
+            'published_at' => !empty($release['published_at']) ? gmdate('Y-m-d H:i:s', strtotime((string) $release['published_at'])) : gmdate('Y-m-d H:i:s'),
+            'body' => !empty($release['body']) ? (string) $release['body'] : '',
+        ];
+
+        set_transient($cache_key, $data, self::UPDATE_CACHE_TTL);
+
+        return $data;
+    }
+
+    private function request_github_release(string $path) {
+        $response = wp_remote_get(
+            self::GITHUB_API_BASE . $path,
+            [
+                'timeout' => 15,
+                'headers' => [
+                    'Accept' => 'application/vnd.github+json',
+                    'User-Agent' => 'Human Card Check/' . self::VERSION . '; ' . home_url('/'),
+                ],
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            return null;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            return null;
+        }
+
+        $data = json_decode((string) wp_remote_retrieve_body($response), true);
+
+        return is_array($data) ? $data : null;
     }
 }
 
