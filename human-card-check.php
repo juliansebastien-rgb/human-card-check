@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
- * Version: 0.2.1
+ * Version: 0.2.2
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.2.1';
+    private const VERSION = '0.2.2';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -613,13 +613,38 @@ final class Human_Card_Check {
             ];
         }
 
-        if (empty($release['tag_name']) || empty($release['zipball_url'])) {
+        if (empty($release['tag_name'])) {
+            return null;
+        }
+
+        $package = '';
+        if (!empty($release['assets']) && is_array($release['assets'])) {
+            foreach ($release['assets'] as $asset) {
+                if (!is_array($asset)) {
+                    continue;
+                }
+
+                $name = isset($asset['name']) ? (string) $asset['name'] : '';
+                $download = isset($asset['browser_download_url']) ? (string) $asset['browser_download_url'] : '';
+
+                if ($name !== '' && str_ends_with($name, '.zip') && $download !== '') {
+                    $package = $download;
+                    break;
+                }
+            }
+        }
+
+        if ($package === '' && !empty($release['zipball_url'])) {
+            $package = (string) $release['zipball_url'];
+        }
+
+        if ($package === '') {
             return null;
         }
 
         $data = [
             'version' => ltrim((string) $release['tag_name'], 'v'),
-            'package' => (string) $release['zipball_url'],
+            'package' => $package,
             'url' => !empty($release['html_url']) ? (string) $release['html_url'] : self::GITHUB_REPOSITORY_URL,
             'published_at' => !empty($release['published_at']) ? gmdate('Y-m-d H:i:s', strtotime((string) $release['published_at'])) : gmdate('Y-m-d H:i:s'),
             'body' => !empty($release['body']) ? (string) $release['body'] : '',

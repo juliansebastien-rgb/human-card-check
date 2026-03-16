@@ -3,7 +3,7 @@ Contributors: mapage
 Tags: captcha, anti-spam, anti-bot, registration, ultimate-member
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 0.2.1
+Stable tag: 0.2.2
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -54,7 +54,7 @@ Only for plugin update checks while the plugin is installed from GitHub. The ver
 
 = Which forms are supported? =
 
-Version 0.2.1 supports the native WordPress registration form and includes an Ultimate Member registration integration.
+Version 0.2.2 supports the native WordPress registration form and includes an Ultimate Member registration integration.
 
 = Can I choose the challenge language? =
 
@@ -65,6 +65,10 @@ Yes. You can force the challenge language in `Settings > Human Card Check`, or l
 No. This plugin focuses on a human verification challenge for registration flows.
 
 == Changelog ==
+
+= 0.2.2 =
+* GitHub updater now prefers packaged release ZIP files.
+* Keeps the plugin folder name stable during future manual installs and updates.
 
 = 0.2.1 =
 * Added a language setting in the admin.
