@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
  * Version: 0.2.0
- * Author: MaPage
+ * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * License: GPL-2.0-or-later
@@ -458,7 +458,7 @@ final class Human_Card_Check {
             'name' => 'Human Card Check',
             'slug' => 'human-card-check',
             'version' => $release['version'],
-            'author' => '<a href="https://github.com/juliansebastien-rgb">MaPage</a>',
+            'author' => '<a href="https://github.com/juliansebastien-rgb">Le Labo d&#039;Azertaf</a>',
             'author_profile' => 'https://github.com/juliansebastien-rgb',
             'homepage' => self::GITHUB_REPOSITORY_URL,
             'requires' => '6.0',
