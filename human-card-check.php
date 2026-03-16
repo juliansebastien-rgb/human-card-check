@@ -232,7 +232,7 @@ final class Human_Card_Check {
                     </tr>
                     <tr>
                         <th scope="row">
-                            <label for="human_card_check_pro_token">Pro token</label>
+                            <label for="human_card_check_pro_token">License token</label>
                         </th>
                         <td>
                             <input
@@ -243,7 +243,7 @@ final class Human_Card_Check {
                                 class="regular-text"
                                 autocomplete="off"
                             />
-                            <p class="description">Enter the token received after payment to unlock Human Card Check Pro features.</p>
+                            <p class="description">Enter the license token received after payment to unlock Human Card Check Pro features.</p>
                             <p>
                                 <strong>Status:</strong>
                                 <?php echo $pro_status['active'] ? esc_html__('Pro active', 'human-card-check') : esc_html__('Free mode', 'human-card-check'); ?>
