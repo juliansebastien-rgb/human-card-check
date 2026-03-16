@@ -8,6 +8,7 @@ It currently supports:
 - Ultimate Member registration
 - a demo shortcode: `[human_card_check_demo]`
 - GitHub-based update checks for self-hosted distribution
+- an admin setting for French, English, Italian and Spanish
 
 ## What it does
 

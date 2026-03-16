@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration forms and Ultimate Member.
- * Version: 0.2.0
+ * Version: 0.2.1
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.2.0';
+    private const VERSION = '0.2.1';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -26,15 +26,42 @@ final class Human_Card_Check {
     private const GITHUB_API_BASE = 'https://api.github.com/repos/juliansebastien-rgb/human-card-check';
     private const GITHUB_REPOSITORY_URL = 'https://github.com/juliansebastien-rgb/human-card-check';
     private const UPDATE_CACHE_TTL = HOUR_IN_SECONDS;
+    private const LANGUAGE_OPTION = 'human_card_check_language';
 
-    /** @var array<int,string> */
+    /** @var array<string,array<int,string>> */
     private array $card_labels = [
-        1 => 'as',
-        2 => 'roi',
-        3 => 'dame',
-        4 => 'valet',
-        5 => '10',
-        6 => '9',
+        'fr' => [
+            1 => 'as',
+            2 => 'roi',
+            3 => 'dame',
+            4 => 'valet',
+            5 => '10',
+            6 => '9',
+        ],
+        'en' => [
+            1 => 'ace',
+            2 => 'king',
+            3 => 'queen',
+            4 => 'jack',
+            5 => '10',
+            6 => '9',
+        ],
+        'it' => [
+            1 => 'asso',
+            2 => 're',
+            3 => 'regina',
+            4 => 'fante',
+            5 => '10',
+            6 => '9',
+        ],
+        'es' => [
+            1 => 'as',
+            2 => 'rey',
+            3 => 'reina',
+            4 => 'jota',
+            5 => '10',
+            6 => '9',
+        ],
     ];
 
     /** @var array<int,int> */
@@ -49,6 +76,8 @@ final class Human_Card_Check {
 
     public function boot(): void {
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
+        add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_menu', [$this, 'register_settings_page']);
 
         add_shortcode('human_card_check_demo', [$this, 'render_demo_shortcode']);
         add_shortcode('caj_human_check_demo', [$this, 'render_demo_shortcode']);
@@ -82,6 +111,69 @@ final class Human_Card_Check {
         );
     }
 
+    public function register_settings(): void {
+        register_setting(
+            'human_card_check_settings',
+            self::LANGUAGE_OPTION,
+            [
+                'type' => 'string',
+                'sanitize_callback' => [$this, 'sanitize_language_setting'],
+                'default' => 'auto',
+            ]
+        );
+    }
+
+    public function register_settings_page(): void {
+        add_options_page(
+            'Human Card Check',
+            'Human Card Check',
+            'manage_options',
+            'human-card-check',
+            [$this, 'render_settings_page']
+        );
+    }
+
+    public function sanitize_language_setting($value): string {
+        $allowed = ['auto', 'fr', 'en', 'it', 'es'];
+        $value = is_string($value) ? strtolower($value) : 'auto';
+
+        return in_array($value, $allowed, true) ? $value : 'auto';
+    }
+
+    public function render_settings_page(): void {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $current = $this->get_language_setting();
+        ?>
+        <div class="wrap">
+            <h1>Human Card Check</h1>
+            <form method="post" action="options.php">
+                <?php settings_fields('human_card_check_settings'); ?>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row">
+                            <label for="human_card_check_language">Challenge language</label>
+                        </th>
+                        <td>
+                            <select id="human_card_check_language" name="<?php echo esc_attr(self::LANGUAGE_OPTION); ?>">
+                                <option value="auto" <?php selected($current, 'auto'); ?>>Automatic (site language)</option>
+                                <option value="fr" <?php selected($current, 'fr'); ?>>Francais</option>
+                                <option value="en" <?php selected($current, 'en'); ?>>English</option>
+                                <option value="it" <?php selected($current, 'it'); ?>>Italiano</option>
+                                <option value="es" <?php selected($current, 'es'); ?>>Espanol</option>
+                            </select>
+                            <p class="description">Choose the language used for the card challenge on the front end.</p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button('Save changes'); ?>
+            </form>
+        </div>
+        <?php
+    }
+
     public function render_demo_shortcode(): string {
         $message = '';
 
@@ -103,7 +195,7 @@ final class Human_Card_Check {
             <?php echo $message; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
             <?php $this->render_challenge_markup('demo'); ?>
             <?php wp_nonce_field('human_card_check_demo_submit', 'human_card_check_demo_nonce'); ?>
-            <p><button type="submit"><?php echo esc_html__('Test the verification', 'human-card-check'); ?></button></p>
+            <p><button type="submit"><?php echo esc_html($this->t('test_button')); ?></button></p>
         </form>
         <?php
         return (string) ob_get_clean();
@@ -146,7 +238,7 @@ final class Human_Card_Check {
         $challenge = $this->create_challenge($context);
         ?>
         <div class="human-card-check" data-context="<?php echo esc_attr($context); ?>">
-            <p class="human-card-check__title"><?php echo esc_html__('Verifions que vous etes bien un humain :-)', 'human-card-check'); ?></p>
+            <p class="human-card-check__title"><?php echo esc_html($this->t('title')); ?></p>
             <p class="human-card-check__question"><?php echo esc_html($challenge['question']); ?></p>
 
             <div class="human-card-check__cards" aria-hidden="true">
@@ -177,7 +269,7 @@ final class Human_Card_Check {
     }
 
     private function create_challenge(string $context): array {
-        $cards = array_map('intval', (array) array_rand($this->card_labels, 3));
+        $cards = array_map('intval', (array) array_rand($this->card_strength, 3));
         shuffle($cards);
 
         $builders = [
@@ -215,15 +307,11 @@ final class Human_Card_Check {
         $target_card = $cards[$target_position];
 
         return [
-            'question' => sprintf(
-                /* translators: %s: card label */
-                __('Where is the %s of hearts?', 'human-card-check'),
-                $this->card_labels[$target_card]
-            ),
+            'question' => $this->t('where_is_card', ['card' => $this->get_card_display_label($target_card)]),
             'choices' => $this->shuffle_choices([
-                'left' => __('Left', 'human-card-check'),
-                'center' => __('Center', 'human-card-check'),
-                'right' => __('Right', 'human-card-check'),
+                'left' => $this->t('left'),
+                'center' => $this->t('center'),
+                'right' => $this->t('right'),
             ]),
             'answer' => ['left', 'center', 'right'][$target_position],
         ];
@@ -237,15 +325,11 @@ final class Human_Card_Check {
         $choices = [];
 
         foreach ($cards as $card_id) {
-            $choices['card_' . $card_id] = sprintf(
-                /* translators: %s: card label */
-                __('%s of hearts', 'human-card-check'),
-                $this->card_labels[$card_id]
-            );
+            $choices['card_' . $card_id] = $this->get_card_display_label($card_id);
         }
 
         return [
-            'question' => __('Which card is in the center?', 'human-card-check'),
+            'question' => $this->t('which_center'),
             'choices' => $this->shuffle_choices($choices),
             'answer' => 'card_' . $cards[1],
         ];
@@ -264,14 +348,10 @@ final class Human_Card_Check {
         $is_present = in_array($target_card, $cards, true);
 
         return [
-            'question' => sprintf(
-                /* translators: %s: card label */
-                __('Do you see the %s of hearts?', 'human-card-check'),
-                $this->card_labels[$target_card]
-            ),
+            'question' => $this->t('do_you_see_card', ['card' => $this->get_card_display_label($target_card)]),
             'choices' => $this->shuffle_choices([
-                'yes' => __('Yes', 'human-card-check'),
-                'no' => __('No', 'human-card-check'),
+                'yes' => $this->t('yes'),
+                'no' => $this->t('no'),
             ]),
             'answer' => $is_present ? 'yes' : 'no',
         ];
@@ -292,7 +372,7 @@ final class Human_Card_Check {
         }
 
         return [
-            'question' => __('How many face cards do you see?', 'human-card-check'),
+            'question' => $this->t('how_many_figures'),
             'choices' => $this->shuffle_choices([
                 '0' => '0',
                 '1' => '1',
@@ -319,15 +399,11 @@ final class Human_Card_Check {
         $choices = [];
 
         foreach ($cards as $card_id) {
-            $choices['card_' . $card_id] = sprintf(
-                /* translators: %s: card label */
-                __('%s of hearts', 'human-card-check'),
-                $this->card_labels[$card_id]
-            );
+            $choices['card_' . $card_id] = $this->get_card_display_label($card_id);
         }
 
         return [
-            'question' => __('Which card is the highest?', 'human-card-check'),
+            'question' => $this->t('which_highest'),
             'choices' => $this->shuffle_choices($choices),
             'answer' => 'card_' . $highest_card,
         ];
@@ -343,7 +419,7 @@ final class Human_Card_Check {
         if ($challenge_id === '' || $submitted_answer === '') {
             return [
                 'valid' => false,
-                'message' => __('Please answer the card verification challenge.', 'human-card-check'),
+                'message' => $this->t('error_answer_required'),
             ];
         }
 
@@ -352,7 +428,7 @@ final class Human_Card_Check {
         if (!is_array($challenge) || empty($challenge['answer']) || empty($challenge['created_at'])) {
             return [
                 'valid' => false,
-                'message' => __('The verification expired. Please try again.', 'human-card-check'),
+                'message' => $this->t('error_expired'),
             ];
         }
 
@@ -364,20 +440,20 @@ final class Human_Card_Check {
         if ($age < self::MIN_SOLVE_SECONDS) {
             return [
                 'valid' => false,
-                'message' => __('The verification was solved too quickly. Please try again.', 'human-card-check'),
+                'message' => $this->t('error_too_fast'),
             ];
         }
 
         if (!$is_correct) {
             return [
                 'valid' => false,
-                'message' => __('The answer is not correct. Please try again.', 'human-card-check'),
+                'message' => $this->t('error_incorrect'),
             ];
         }
 
         return [
             'valid' => true,
-            'message' => __('Verification successful.', 'human-card-check'),
+            'message' => $this->t('success'),
         ];
     }
 
@@ -403,9 +479,9 @@ final class Human_Card_Check {
 
     private function position_label(int $index): string {
         return [
-            __('Left', 'human-card-check'),
-            __('Center', 'human-card-check'),
-            __('Right', 'human-card-check'),
+            $this->t('left'),
+            $this->t('center'),
+            $this->t('right'),
         ][$index] ?? '';
     }
 
@@ -468,7 +544,7 @@ final class Human_Card_Check {
             'download_link' => $release['package'],
             'sections' => [
                 'description' => 'Human-friendly card challenge for WordPress registration forms and Ultimate Member.',
-                'installation' => 'Upload the plugin, activate it, then test it on your registration forms. You can also use the [human_card_check_demo] shortcode on a test page.',
+                'installation' => 'Upload the plugin, activate it, then test it on your registration forms. You can also use the [human_card_check_demo] shortcode on a test page. The challenge language can be changed in Settings > Human Card Check.',
                 'changelog' => sprintf("= %s =\n* GitHub release package.\n", $release['version']),
             ],
             'banners' => [],
@@ -578,6 +654,131 @@ final class Human_Card_Check {
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
 
         return is_array($data) ? $data : null;
+    }
+
+    private function get_language_setting(): string {
+        $value = get_option(self::LANGUAGE_OPTION, 'auto');
+
+        return is_string($value) ? $value : 'auto';
+    }
+
+    private function get_current_language(): string {
+        $setting = $this->get_language_setting();
+        if ($setting !== 'auto') {
+            return $setting;
+        }
+
+        $locale = function_exists('determine_locale') ? determine_locale() : get_locale();
+        $prefix = strtolower(substr((string) $locale, 0, 2));
+
+        return in_array($prefix, ['fr', 'en', 'it', 'es'], true) ? $prefix : 'en';
+    }
+
+    private function get_card_display_label(int $card_id): string {
+        $lang = $this->get_current_language();
+        $labels = $this->card_labels[$lang] ?? $this->card_labels['en'];
+
+        return $this->t('card_of_hearts', ['card' => $labels[$card_id] ?? (string) $card_id]);
+    }
+
+    private function t(string $key, array $replacements = []): string {
+        $lang = $this->get_current_language();
+        $translations = $this->translations();
+        $value = $translations[$lang][$key] ?? $translations['en'][$key] ?? $key;
+
+        foreach ($replacements as $token => $replacement) {
+            $value = str_replace('{' . $token . '}', (string) $replacement, $value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return array<string,array<string,string>>
+     */
+    private function translations(): array {
+        return [
+            'fr' => [
+                'title' => 'Verifions que vous etes bien un humain :-)',
+                'test_button' => 'Tester la verification',
+                'left' => 'A gauche',
+                'center' => 'Au centre',
+                'right' => 'A droite',
+                'yes' => 'Oui',
+                'no' => 'Non',
+                'card_of_hearts' => '{card} de coeur',
+                'where_is_card' => 'Ou se trouve le {card} ?',
+                'which_center' => 'Quelle carte est au centre ?',
+                'do_you_see_card' => 'Voyez-vous le {card} ?',
+                'how_many_figures' => 'Combien de figures voyez-vous ?',
+                'which_highest' => 'Quelle est la carte la plus forte ?',
+                'error_answer_required' => 'Merci de repondre a la verification par cartes.',
+                'error_expired' => 'La verification a expire. Merci d essayer de nouveau.',
+                'error_too_fast' => 'La verification a ete resolue trop vite. Merci de recommencer calmement.',
+                'error_incorrect' => 'La reponse n est pas correcte. Merci de recommencer.',
+                'success' => 'Verification reussie.',
+            ],
+            'en' => [
+                'title' => 'Let us make sure you are human :-)',
+                'test_button' => 'Test the verification',
+                'left' => 'Left',
+                'center' => 'Center',
+                'right' => 'Right',
+                'yes' => 'Yes',
+                'no' => 'No',
+                'card_of_hearts' => '{card} of hearts',
+                'where_is_card' => 'Where is the {card}?',
+                'which_center' => 'Which card is in the center?',
+                'do_you_see_card' => 'Do you see the {card}?',
+                'how_many_figures' => 'How many face cards do you see?',
+                'which_highest' => 'Which card is the highest?',
+                'error_answer_required' => 'Please answer the card verification challenge.',
+                'error_expired' => 'The verification expired. Please try again.',
+                'error_too_fast' => 'The verification was solved too quickly. Please try again.',
+                'error_incorrect' => 'The answer is not correct. Please try again.',
+                'success' => 'Verification successful.',
+            ],
+            'it' => [
+                'title' => 'Verifichiamo che tu sia davvero umano :-)',
+                'test_button' => 'Testa la verifica',
+                'left' => 'A sinistra',
+                'center' => 'Al centro',
+                'right' => 'A destra',
+                'yes' => 'Si',
+                'no' => 'No',
+                'card_of_hearts' => '{card} di cuori',
+                'where_is_card' => 'Dove si trova il {card}?',
+                'which_center' => 'Quale carta e al centro?',
+                'do_you_see_card' => 'Vedi il {card}?',
+                'how_many_figures' => 'Quante figure vedi?',
+                'which_highest' => 'Qual e la carta piu alta?',
+                'error_answer_required' => 'Rispondi alla verifica con le carte.',
+                'error_expired' => 'La verifica e scaduta. Riprova.',
+                'error_too_fast' => 'La verifica e stata risolta troppo velocemente. Riprova.',
+                'error_incorrect' => 'La risposta non e corretta. Riprova.',
+                'success' => 'Verifica completata con successo.',
+            ],
+            'es' => [
+                'title' => 'Verifiquemos que realmente eres humano :-)',
+                'test_button' => 'Probar la verificacion',
+                'left' => 'A la izquierda',
+                'center' => 'En el centro',
+                'right' => 'A la derecha',
+                'yes' => 'Si',
+                'no' => 'No',
+                'card_of_hearts' => '{card} de corazones',
+                'where_is_card' => 'Donde esta el {card}?',
+                'which_center' => 'Que carta esta en el centro?',
+                'do_you_see_card' => 'Ves el {card}?',
+                'how_many_figures' => 'Cuantas figuras ves?',
+                'which_highest' => 'Cual es la carta mas alta?',
+                'error_answer_required' => 'Responde al desafio de cartas.',
+                'error_expired' => 'La verificacion ha caducado. Intentalo de nuevo.',
+                'error_too_fast' => 'La verificacion se resolvio demasiado rapido. Intentalo de nuevo.',
+                'error_incorrect' => 'La respuesta no es correcta. Intentalo de nuevo.',
+                'success' => 'Verificacion completada con exito.',
+            ],
+        ];
     }
 }
 
