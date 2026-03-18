@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.4.1
+ * Version: 0.4.3
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.4.1';
+    private const VERSION = '0.4.3';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -33,6 +33,7 @@ final class Human_Card_Check {
     private const COMMENT_AJAX_OPTION = 'human_card_check_comment_ajax_protection';
     private const LOGIN_PROTECTION_OPTION = 'human_card_check_login_protection';
     private const DEFAULT_PRO_PAYMENT_LINK = 'https://buy.stripe.com/cNidR29Lz7OV8cN2Hj8k800';
+    private const TRUST_SERVICE_URL = 'https://trust.mapage-wp.online';
 
     /** @var array<string,array<int,string>> */
     private array $card_labels = [
@@ -201,17 +202,9 @@ final class Human_Card_Check {
     public function sanitize_pro_token_setting($value): string {
         $token = is_string($value) ? trim($value) : '';
         $token = preg_replace('/[^A-Za-z0-9_\-]/', '', $token);
-        $is_active = $token !== '' && strlen($token) >= 16;
+        $status = $this->validate_pro_license_token($token);
 
-        update_option(
-            self::PRO_STATUS_OPTION,
-            [
-                'active' => $is_active,
-                'checked_at' => gmdate('Y-m-d H:i:s'),
-                'source' => $is_active ? 'manual-token' : 'none',
-            ],
-            false
-        );
+        update_option(self::PRO_STATUS_OPTION, $status, false);
 
         return is_string($token) ? $token : '';
     }
@@ -239,6 +232,8 @@ final class Human_Card_Check {
         $payment_link = $this->get_pro_payment_link();
         $comment_ajax_protection = $this->is_comment_ajax_protection_enabled();
         $login_protection = $this->is_login_protection_enabled();
+        $detected_site_url = home_url('/');
+        $token_tail = $this->mask_token_tail($pro_token);
         ?>
         <div class="wrap">
             <h1>Human Card Check</h1>
@@ -330,11 +325,16 @@ final class Human_Card_Check {
                             <p class="description">Enter the license token received after payment to unlock Human Card Check Pro features.</p>
                             <p>
                                 <strong>Status:</strong>
-                                <?php echo $pro_status['active'] ? esc_html__('Pro active', 'human-card-check') : esc_html__('Free mode', 'human-card-check'); ?>
+                                <?php echo $pro_status['active'] ? esc_html__('License valid', 'human-card-check') : esc_html__('License invalid', 'human-card-check'); ?>
                             </p>
                             <?php if (!empty($pro_status['checked_at'])) : ?>
                                 <p class="description">Last token check: <?php echo esc_html($pro_status['checked_at']); ?></p>
                             <?php endif; ?>
+                            <?php if (!empty($pro_status['message'])) : ?>
+                                <p class="description"><?php echo esc_html($pro_status['message']); ?></p>
+                            <?php endif; ?>
+                            <p class="description">Detected site URL: <code><?php echo esc_html($detected_site_url); ?></code></p>
+                            <p class="description">Detected token: <code><?php echo esc_html($token_tail); ?></code></p>
                         </td>
                     </tr>
                 </table>
@@ -1144,7 +1144,7 @@ final class Human_Card_Check {
     }
 
     /**
-     * @return array{active:bool,checked_at:string,source:string}
+     * @return array{active:bool,checked_at:string,source:string,message:string,plan:string}
      */
     private function get_pro_status(): array {
         $value = get_option(self::PRO_STATUS_OPTION, []);
@@ -1153,6 +1153,8 @@ final class Human_Card_Check {
             'active' => !empty($value['active']),
             'checked_at' => isset($value['checked_at']) && is_string($value['checked_at']) ? $value['checked_at'] : '',
             'source' => isset($value['source']) && is_string($value['source']) ? $value['source'] : 'none',
+            'message' => isset($value['message']) && is_string($value['message']) ? $value['message'] : '',
+            'plan' => isset($value['plan']) && is_string($value['plan']) ? $value['plan'] : '',
         ];
     }
 
@@ -1164,6 +1166,71 @@ final class Human_Card_Check {
     private function is_wp_login_action(string $expected_action): bool {
         $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : 'login';
         return $action === $expected_action;
+    }
+
+    private function mask_token_tail(string $token): string {
+        $token = trim($token);
+        if ($token === '') {
+            return '(empty)';
+        }
+        if (strlen($token) <= 14) {
+            return $token;
+        }
+        return substr($token, 0, 8) . '...' . substr($token, -6);
+    }
+
+    /**
+     * @return array{active:bool,checked_at:string,source:string,message:string,plan:string}
+     */
+    private function validate_pro_license_token(string $token): array {
+        $checked_at = gmdate('Y-m-d H:i:s');
+
+        if ($token === '' || strlen($token) < 16) {
+            return [
+                'active' => false,
+                'checked_at' => $checked_at,
+                'source' => 'none',
+                'message' => 'No valid license token entered yet.',
+                'plan' => '',
+            ];
+        }
+
+        $response = wp_remote_post(
+            trailingslashit(self::TRUST_SERVICE_URL) . 'v1/license/validate',
+            [
+                'timeout' => 10,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                ],
+                'body' => wp_json_encode([
+                    'license_token' => $token,
+                    'site_url' => home_url('/'),
+                    'site_name' => get_bloginfo('name'),
+                ]),
+            ]
+        );
+
+        if (is_wp_error($response)) {
+            return [
+                'active' => false,
+                'checked_at' => $checked_at,
+                'source' => 'trust-service',
+                'message' => $response->get_error_message(),
+                'plan' => '',
+            ];
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $data = json_decode((string) wp_remote_retrieve_body($response), true);
+        $is_valid = $code >= 200 && $code < 300 && is_array($data) && !empty($data['valid']);
+
+        return [
+            'active' => $is_valid,
+            'checked_at' => $checked_at,
+            'source' => 'trust-service',
+            'message' => is_array($data) && !empty($data['message']) ? (string) $data['message'] : ($is_valid ? 'License validated.' : 'License validation failed.'),
+            'plan' => is_array($data) && !empty($data['plan']) ? (string) $data['plan'] : '',
+        ];
     }
 
     /**
