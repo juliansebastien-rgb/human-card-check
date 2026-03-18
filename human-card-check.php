@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.4.0
+ * Version: 0.4.1
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.4.0';
+    private const VERSION = '0.4.1';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -97,6 +97,7 @@ final class Human_Card_Check {
 
         add_action('um_after_register_fields', [$this, 'render_um_registration_challenge']);
         add_action('um_submit_form_errors_hook_registration', [$this, 'validate_um_registration'], 20);
+        add_action('um_submit_form_errors_hook__registration', [$this, 'validate_um_registration'], 20, 1);
         add_action('comment_form_after_fields', [$this, 'render_comment_challenge']);
         add_action('comment_form_logged_in_after', [$this, 'render_comment_challenge']);
         add_filter('preprocess_comment', [$this, 'validate_comment_submission'], 20);
@@ -479,7 +480,7 @@ final class Human_Card_Check {
         $this->render_challenge_markup('um-register');
     }
 
-    public function validate_um_registration(): void {
+    public function validate_um_registration($args = null): void {
         if (!function_exists('UM')) {
             return;
         }
