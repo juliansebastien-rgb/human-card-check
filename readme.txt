@@ -3,7 +3,7 @@ Contributors: mapage
 Tags: captcha, anti-spam, anti-bot, registration, ultimate-member, woocommerce, comments, login
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 0.3.9
+Stable tag: 0.4.0
 Requires PHP: 7.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -59,7 +59,7 @@ Only for plugin update checks while the plugin is installed from GitHub. The ver
 
 = Which forms are supported? =
 
-Version 0.3.9 supports native WordPress registration, WooCommerce registration, WordPress comments, WordPress login, WordPress lost password and Ultimate Member registration.
+Version 0.4.0 supports native WordPress registration, WooCommerce registration, WordPress comments, WordPress login, WordPress lost password and Ultimate Member registration.
 
 = Can I choose the challenge language? =
 
@@ -75,6 +75,10 @@ The Pro addon is intended for advanced trust scoring, email/domain analysis, ris
 No. This plugin focuses on a human verification challenge for registration flows.
 
 == Changelog ==
+
+= 0.4.0 =
+* Added a setting to protect the native WordPress admin login screen.
+* Fixed challenge assets loading on wp-login so the cards display correctly on the admin login page.
 
 = 0.3.9 =
 * Added a free-plugin setting to keep AJAX comment protection enabled by default while allowing admins to disable it if needed.

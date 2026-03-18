@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.3.9
+ * Version: 0.4.0
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.3.9';
+    private const VERSION = '0.4.0';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -31,6 +31,7 @@ final class Human_Card_Check {
     private const PRO_STATUS_OPTION = 'human_card_check_pro_status';
     private const PRO_PAYMENT_LINK_OPTION = 'human_card_check_pro_payment_link';
     private const COMMENT_AJAX_OPTION = 'human_card_check_comment_ajax_protection';
+    private const LOGIN_PROTECTION_OPTION = 'human_card_check_login_protection';
     private const DEFAULT_PRO_PAYMENT_LINK = 'https://buy.stripe.com/cNidR29Lz7OV8cN2Hj8k800';
 
     /** @var array<string,array<int,string>> */
@@ -81,6 +82,7 @@ final class Human_Card_Check {
 
     public function boot(): void {
         add_action('wp_enqueue_scripts', [$this, 'register_assets']);
+        add_action('login_enqueue_scripts', [$this, 'register_assets']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_menu', [$this, 'register_settings_page']);
         add_filter('plugin_action_links_' . plugin_basename(__FILE__), [$this, 'plugin_action_links']);
@@ -166,6 +168,16 @@ final class Human_Card_Check {
                 'default' => true,
             ]
         );
+
+        register_setting(
+            'human_card_check_settings',
+            self::LOGIN_PROTECTION_OPTION,
+            [
+                'type' => 'boolean',
+                'sanitize_callback' => [$this, 'sanitize_checkbox_setting'],
+                'default' => true,
+            ]
+        );
     }
 
     public function register_settings_page(): void {
@@ -225,6 +237,7 @@ final class Human_Card_Check {
         $pro_status = $this->get_pro_status();
         $payment_link = $this->get_pro_payment_link();
         $comment_ajax_protection = $this->is_comment_ajax_protection_enabled();
+        $login_protection = $this->is_login_protection_enabled();
         ?>
         <div class="wrap">
             <h1>Human Card Check</h1>
@@ -262,6 +275,24 @@ final class Human_Card_Check {
                             />
                             <p class="description">This payment link is managed by the plugin and shown in the plugin list and settings pages.</p>
                             <p><a href="<?php echo esc_url($payment_link); ?>" target="_blank" rel="noopener noreferrer">Open payment page</a></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            Protect wp-admin / wp-login
+                        </th>
+                        <td>
+                            <label for="human_card_check_login_protection">
+                                <input
+                                    type="checkbox"
+                                    id="human_card_check_login_protection"
+                                    name="<?php echo esc_attr(self::LOGIN_PROTECTION_OPTION); ?>"
+                                    value="1"
+                                    <?php checked($login_protection); ?>
+                                />
+                                Show the Human Card Check challenge on the WordPress login screen.
+                            </label>
+                            <p class="description">Enabled by default. Disable this if you do not want to protect the native WordPress admin login form.</p>
                         </td>
                     </tr>
                     <tr>
@@ -546,7 +577,7 @@ final class Human_Card_Check {
     }
 
     public function render_login_challenge(): void {
-        if (!$this->is_wp_login_action('login')) {
+        if (!$this->is_login_protection_enabled() || !$this->is_wp_login_action('login')) {
             return;
         }
 
@@ -554,7 +585,7 @@ final class Human_Card_Check {
     }
 
     public function validate_wp_login($user, string $username, string $password) {
-        if (!$this->is_wp_login_action('login') || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        if (!$this->is_login_protection_enabled() || !$this->is_wp_login_action('login') || $_SERVER['REQUEST_METHOD'] !== 'POST') {
             return $user;
         }
 
@@ -1103,6 +1134,11 @@ final class Human_Card_Check {
 
     private function is_comment_ajax_protection_enabled(): bool {
         $value = get_option(self::COMMENT_AJAX_OPTION, true);
+        return !empty($value);
+    }
+
+    private function is_login_protection_enabled(): bool {
+        $value = get_option(self::LOGIN_PROTECTION_OPTION, true);
         return !empty($value);
     }
 
