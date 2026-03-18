@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.3.8
+ * Version: 0.3.9
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.3.8';
+    private const VERSION = '0.3.9';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -30,6 +30,7 @@ final class Human_Card_Check {
     private const PRO_TOKEN_OPTION = 'human_card_check_pro_token';
     private const PRO_STATUS_OPTION = 'human_card_check_pro_status';
     private const PRO_PAYMENT_LINK_OPTION = 'human_card_check_pro_payment_link';
+    private const COMMENT_AJAX_OPTION = 'human_card_check_comment_ajax_protection';
     private const DEFAULT_PRO_PAYMENT_LINK = 'https://buy.stripe.com/cNidR29Lz7OV8cN2Hj8k800';
 
     /** @var array<string,array<int,string>> */
@@ -155,6 +156,16 @@ final class Human_Card_Check {
                 'default' => self::DEFAULT_PRO_PAYMENT_LINK,
             ]
         );
+
+        register_setting(
+            'human_card_check_settings',
+            self::COMMENT_AJAX_OPTION,
+            [
+                'type' => 'boolean',
+                'sanitize_callback' => [$this, 'sanitize_checkbox_setting'],
+                'default' => true,
+            ]
+        );
     }
 
     public function register_settings_page(): void {
@@ -192,6 +203,18 @@ final class Human_Card_Check {
         return is_string($token) ? $token : '';
     }
 
+    public function sanitize_checkbox_setting($value): bool {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_string($value)) {
+            return in_array(strtolower($value), ['1', 'true', 'on', 'yes'], true);
+        }
+
+        return !empty($value);
+    }
+
     public function render_settings_page(): void {
         if (!current_user_can('manage_options')) {
             return;
@@ -201,6 +224,7 @@ final class Human_Card_Check {
         $pro_token = $this->get_pro_token();
         $pro_status = $this->get_pro_status();
         $payment_link = $this->get_pro_payment_link();
+        $comment_ajax_protection = $this->is_comment_ajax_protection_enabled();
         ?>
         <div class="wrap">
             <h1>Human Card Check</h1>
@@ -238,6 +262,24 @@ final class Human_Card_Check {
                             />
                             <p class="description">This payment link is managed by the plugin and shown in the plugin list and settings pages.</p>
                             <p><a href="<?php echo esc_url($payment_link); ?>" target="_blank" rel="noopener noreferrer">Open payment page</a></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            AJAX comment protection
+                        </th>
+                        <td>
+                            <label for="human_card_check_comment_ajax_protection">
+                                <input
+                                    type="checkbox"
+                                    id="human_card_check_comment_ajax_protection"
+                                    name="<?php echo esc_attr(self::COMMENT_AJAX_OPTION); ?>"
+                                    value="1"
+                                    <?php checked($comment_ajax_protection); ?>
+                                />
+                                Validate the Human Card Check challenge for AJAX comment submissions too.
+                            </label>
+                            <p class="description">Enabled by default. Turn this off only if your theme or comment plugin uses a custom AJAX flow that conflicts with comment posting.</p>
                         </td>
                     </tr>
                     <tr>
@@ -472,6 +514,10 @@ final class Human_Card_Check {
      */
     public function validate_comment_submission(array $commentdata): array {
         if (is_admin()) {
+            return $commentdata;
+        }
+
+        if (wp_doing_ajax() && !$this->is_comment_ajax_protection_enabled()) {
             return $commentdata;
         }
 
@@ -1053,6 +1099,11 @@ final class Human_Card_Check {
         $value = get_option(self::PRO_PAYMENT_LINK_OPTION, self::DEFAULT_PRO_PAYMENT_LINK);
         $value = is_string($value) ? trim($value) : '';
         return $value !== '' ? $value : self::DEFAULT_PRO_PAYMENT_LINK;
+    }
+
+    private function is_comment_ajax_protection_enabled(): bool {
+        $value = get_option(self::COMMENT_AJAX_OPTION, true);
+        return !empty($value);
     }
 
     /**
