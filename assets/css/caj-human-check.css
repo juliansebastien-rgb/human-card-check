@@ -97,3 +97,47 @@
         padding: 9px 10px;
     }
 }
+
+body.login .human-card-check {
+    margin: 16px 0;
+    padding: 14px;
+}
+
+body.login .human-card-check__title {
+    font-size: 0.78rem;
+}
+
+body.login .human-card-check__question {
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+}
+
+body.login .human-card-check__cards {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+body.login .human-card-check__card {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+body.login .human-card-check__card img {
+    width: 100%;
+    max-width: 78px;
+    margin-bottom: 6px;
+}
+
+body.login .human-card-check__card figcaption {
+    font-size: 0.82rem;
+}
+
+body.login .human-card-check__answers {
+    gap: 8px;
+}
+
+body.login .human-card-check__answer {
+    padding: 8px 10px;
+}
