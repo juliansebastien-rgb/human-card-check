@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.4.4
+ * Version: 0.4.5
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.4.4';
+    private const VERSION = '0.4.5';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -360,19 +360,11 @@ final class Human_Card_Check {
                 align-items: center;
                 gap: 18px;
                 margin: 18px 0 24px;
-                padding: 20px 22px;
-                border: 1px solid #d8dee8;
-                border-radius: 20px;
-                background: linear-gradient(135deg, #fffdf8 0%, #f1f6ff 100%);
-                box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
             }
             .hcc-admin-brand__logo {
                 width: 78px;
                 height: 78px;
-                border-radius: 22px;
                 object-fit: cover;
-                background: #fff;
-                box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
             }
             .hcc-admin-brand__eyebrow {
                 margin: 0 0 6px;
