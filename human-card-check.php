@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.4.5
+ * Version: 0.4.6
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.4.5';
+    private const VERSION = '0.4.6';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -591,18 +591,6 @@ final class Human_Card_Check {
             return new WP_Error('human_card_check', $result['message']);
         }
 
-        $decision = $this->run_pro_registration_analysis(
-            [
-                'context' => 'login',
-                'user_login' => $username,
-                'user_email' => '',
-            ]
-        );
-
-        if (!$decision['allow']) {
-            return new WP_Error('human_card_check_pro', $decision['message']);
-        }
-
         return $user;
     }
 
@@ -616,33 +604,6 @@ final class Human_Card_Check {
         if (!$result['valid']) {
             $errors->add('human_card_check', $result['message']);
             return;
-        }
-
-        $user_login = '';
-        $user_email = '';
-
-        if ($user_data instanceof WP_User) {
-            $user_login = $user_data->user_login;
-            $user_email = $user_data->user_email;
-        } elseif (is_string($user_data)) {
-            $submitted = trim($user_data);
-            if (is_email($submitted)) {
-                $user_email = $submitted;
-            } else {
-                $user_login = $submitted;
-            }
-        }
-
-        $decision = $this->run_pro_registration_analysis(
-            [
-                'context' => 'lostpassword',
-                'user_login' => $user_login,
-                'user_email' => $user_email,
-            ]
-        );
-
-        if (!$decision['allow']) {
-            $errors->add('human_card_check_pro', $decision['message']);
         }
     }
 
