@@ -3,7 +3,7 @@
  * Plugin Name: Human Card Check
  * Plugin URI: https://github.com/juliansebastien-rgb/human-card-check
  * Description: Human-friendly card challenge for WordPress registration, WooCommerce, comments, login, lost password and Ultimate Member.
- * Version: 0.4.6
+ * Version: 0.4.7
  * Author: Le Labo d'Azertaf
  * Requires at least: 6.0
  * Requires PHP: 7.4
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Human_Card_Check {
-    private const VERSION = '0.4.6';
+    private const VERSION = '0.4.7';
     private const TRANSIENT_PREFIX = 'human_card_check_';
     private const CHALLENGE_TTL = 10 * MINUTE_IN_SECONDS;
     private const MIN_SOLVE_SECONDS = 3;
@@ -99,6 +99,8 @@ final class Human_Card_Check {
         add_action('um_after_register_fields', [$this, 'render_um_registration_challenge']);
         add_action('um_submit_form_errors_hook_registration', [$this, 'validate_um_registration'], 20);
         add_action('um_submit_form_errors_hook__registration', [$this, 'validate_um_registration'], 20, 1);
+        add_action('um_after_login_fields', [$this, 'render_um_login_challenge']);
+        add_action('um_submit_form_errors_hook_login', [$this, 'validate_um_login'], 20, 2);
         add_action('comment_form_after_fields', [$this, 'render_comment_challenge']);
         add_action('comment_form_logged_in_after', [$this, 'render_comment_challenge']);
         add_filter('preprocess_comment', [$this, 'validate_comment_submission'], 20);
@@ -472,6 +474,10 @@ final class Human_Card_Check {
         $this->render_challenge_markup('um-register');
     }
 
+    public function render_um_login_challenge(): void {
+        $this->render_challenge_markup('um-login');
+    }
+
     public function validate_um_registration($args = null): void {
         if (!function_exists('UM')) {
             return;
@@ -495,6 +501,17 @@ final class Human_Card_Check {
             if (!$decision['allow']) {
                 UM()->form()->add_error('human_card_check_pro', $decision['message']);
             }
+        }
+    }
+
+    public function validate_um_login($submitted_data = null, $form_data = null): void {
+        if (!function_exists('UM')) {
+            return;
+        }
+
+        $result = $this->validate_request_payload();
+        if (!$result['valid']) {
+            UM()->form()->add_error('human_card_check', $result['message']);
         }
     }
 
@@ -578,7 +595,12 @@ final class Human_Card_Check {
     }
 
     public function validate_wp_login($user, string $username, string $password) {
-        if (!$this->is_login_protection_enabled() || !$this->is_wp_login_action('login') || $_SERVER['REQUEST_METHOD'] !== 'POST') {
+        if (
+            !$this->is_login_protection_enabled() ||
+            !$this->is_wp_login_action('login') ||
+            $_SERVER['REQUEST_METHOD'] !== 'POST' ||
+            !$this->is_native_wp_login_request()
+        ) {
             return $user;
         }
 
@@ -1119,6 +1141,11 @@ final class Human_Card_Check {
     private function is_wp_login_action(string $expected_action): bool {
         $action = isset($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : 'login';
         return $action === $expected_action;
+    }
+
+    private function is_native_wp_login_request(): bool {
+        $script_name = isset($_SERVER['SCRIPT_NAME']) ? wp_unslash((string) $_SERVER['SCRIPT_NAME']) : '';
+        return $script_name !== '' && basename($script_name) === 'wp-login.php';
     }
 
     private function mask_token_tail(string $token): string {
